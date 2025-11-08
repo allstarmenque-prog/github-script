@@ -1,0 +1,708 @@
+-- LocalScript inside StarterPlayerScripts
+-- Confirmation UI -> proceeds into full StudyMenu GUI
+-- By crtzPOHANS21
+
+---------------------------------------------------------------------
+-- Services (used by both parts)
+---------------------------------------------------------------------
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+---------------------------------------------------------------------
+-- Small Confirmation GUI
+---------------------------------------------------------------------
+local confirmGui = Instance.new("ScreenGui")
+confirmGui.Name = "ConfirmMenu"
+confirmGui.ResetOnSpawn = false
+confirmGui.IgnoreGuiInset = true
+confirmGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+confirmGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Toggle button for the confirm UI
+local confirmToggle = Instance.new("TextButton")
+confirmToggle.Size = UDim2.new(0, 50, 0, 50)
+confirmToggle.Position = UDim2.new(0, 10, 0.8, 0)
+confirmToggle.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+confirmToggle.Text = "="
+confirmToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+confirmToggle.Font = Enum.Font.GothamBold
+confirmToggle.TextSize = 20
+confirmToggle.Parent = confirmGui
+Instance.new("UICorner", confirmToggle).CornerRadius = UDim.new(0, 8)
+
+local confirmFrame = Instance.new("Frame")
+confirmFrame.Size = UDim2.new(0, 260, 0, 150)
+confirmFrame.Position = UDim2.new(0.5, -130, 0.5, -75)
+confirmFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+confirmFrame.Visible = false
+confirmFrame.Parent = confirmGui
+Instance.new("UICorner", confirmFrame).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "By crtzPOHANS21"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Parent = confirmFrame
+
+local proceedBtn = Instance.new("TextButton")
+proceedBtn.Size = UDim2.new(0.5, -10, 0, 40)
+proceedBtn.Position = UDim2.new(0, 5, 1, -45)
+proceedBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+proceedBtn.Text = "Proceed"
+proceedBtn.Font = Enum.Font.GothamBold
+proceedBtn.TextSize = 16
+proceedBtn.TextColor3 = Color3.fromRGB(255,255,255)
+proceedBtn.Parent = confirmFrame
+Instance.new("UICorner", proceedBtn).CornerRadius = UDim.new(0, 8)
+
+local cancelBtn = Instance.new("TextButton")
+cancelBtn.Size = UDim2.new(0.5, -10, 0, 40)
+cancelBtn.Position = UDim2.new(0.5, 5, 1, -45)
+cancelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+cancelBtn.Text = "Cancel"
+cancelBtn.Font = Enum.Font.GothamBold
+cancelBtn.TextSize = 16
+cancelBtn.TextColor3 = Color3.fromRGB(255,255,255)
+cancelBtn.Parent = confirmFrame
+Instance.new("UICorner", cancelBtn).CornerRadius = UDim.new(0, 8)
+
+confirmToggle.MouseButton1Click:Connect(function()
+	confirmFrame.Visible = not confirmFrame.Visible
+end)
+
+cancelBtn.MouseButton1Click:Connect(function()
+	if confirmGui then confirmGui:Destroy() end -- only removes the small confirm UI
+end)
+
+---------------------------------------------------------------------
+-- Proceed: spawn YOUR full StudyMenu GUI
+---------------------------------------------------------------------
+proceedBtn.MouseButton1Click:Connect(function()
+	-- remove confirm UI
+	if confirmGui then confirmGui:Destroy() end
+
+	-----------------------------------------------------------------
+	-- StudyMenu root ScreenGui
+	-----------------------------------------------------------------
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "StudyMenu"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = player:WaitForChild("PlayerGui")
+
+	-- Notification System (rounded, fade in/out)
+	local function createNotification(msg)
+		local notif = Instance.new("Frame")
+		notif.Size = UDim2.new(0, 220, 0, 40)
+		notif.Position = UDim2.new(0.5, -110, 0.12, 0)
+		notif.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		notif.BackgroundTransparency = 1
+		notif.BorderSizePixel = 0
+		notif.ZIndex = 100
+		notif.Parent = gui
+		Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 12)
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, -10, 1, 0)
+		label.Position = UDim2.new(0, 5, 0, 0)
+		label.BackgroundTransparency = 1
+		label.Text = msg
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 16
+		label.TextColor3 = Color3.fromRGB(255,255,255)
+		label.TextTransparency = 1
+		label.ZIndex = 101
+		label.Parent = notif
+
+		TweenService:Create(notif, TweenInfo.new(0.25), {BackgroundTransparency = 0.2}):Play()
+		TweenService:Create(label, TweenInfo.new(0.25), {TextTransparency = 0}):Play()
+
+		task.delay(2, function()
+			local t1 = TweenService:Create(notif, TweenInfo.new(0.4), {BackgroundTransparency = 1})
+			local t2 = TweenService:Create(label, TweenInfo.new(0.4), {TextTransparency = 1})
+			t1:Play(); t2:Play()
+			t1.Completed:Connect(function() notif:Destroy() end)
+		end)
+	end
+
+	-- Helpers
+	local function makeDraggable(targetFrame, handle)
+		handle = handle or targetFrame
+		local dragging, dragInput, dragStart, startPos
+		local function update(input)
+			local delta = input.Position - dragStart
+			targetFrame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+		handle.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				dragStart = input.Position
+				startPos = targetFrame.Position
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						dragging = false
+					end
+				end)
+			end
+		end)
+		handle.InputChanged:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch then
+				dragInput = input
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if input == dragInput and dragging then
+				update(input)
+			end
+		end)
+	end
+
+	local function clampNumber(n, min, max)
+		n = tonumber(n)
+		if not n or n ~= n then return nil end
+		if n < min then n = min end
+		if n > max then n = max end
+		return n
+	end
+
+	-- Toggle button (draggable itself)
+	local toggleBtn = Instance.new("TextButton")
+	toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+	toggleBtn.Position = UDim2.new(0, 10, 0.8, 0)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+	toggleBtn.Text = "="
+	toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	toggleBtn.Font = Enum.Font.GothamBold
+	toggleBtn.TextSize = 20
+	toggleBtn.ZIndex = 90
+	toggleBtn.Parent = gui
+	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+	makeDraggable(toggleBtn)
+
+	-- Menu frame (NOT draggable directly; only header is)
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0, 230, 0, 520)
+	frame.Position = UDim2.new(0.7, 0, 0.5, -260)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	frame.BackgroundTransparency = 0.1
+	frame.Visible = false
+	frame.ZIndex = 10
+	frame.Parent = gui
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+	-- Title bar (drag handle)
+	local titleBar = Instance.new("Frame")
+	titleBar.Size = UDim2.new(1, 0, 0, 32)
+	titleBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	titleBar.BackgroundTransparency = 0.6
+	titleBar.BorderSizePixel = 0
+	titleBar.ZIndex = 20
+	titleBar.Parent = frame
+
+	local title2 = Instance.new("TextLabel")
+	title2.Size = UDim2.new(1, -10, 1, 0)
+	title2.Position = UDim2.new(0, 5, 0, 0)
+	title2.BackgroundTransparency = 1
+	title2.Text = "By crtzPOHANS21"
+	title2.Font = Enum.Font.GothamBold
+	title2.TextSize = 18
+	title2.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title2.ZIndex = 21
+	title2.Parent = titleBar
+
+	-- Now only the title bar drags the frame (so buttons receive clicks)
+	makeDraggable(frame, titleBar)
+
+	-- Rainbow background (subtle)
+	local hue = 0
+	RunService.RenderStepped:Connect(function()
+		hue = (hue + 0.002) % 1
+		frame.BackgroundColor3 = Color3.fromHSV(hue, 0.85, 1)
+	end)
+
+	-- Scrollable menu (buttons live here)
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Size = UDim2.new(1, 0, 1, -32)
+	scroll.Position = UDim2.new(0, 0, 0, 32)
+	scroll.BackgroundTransparency = 1
+	scroll.ScrollBarThickness = 6
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 620)
+	scroll.ZIndex = 15
+	scroll.Active = true
+	scroll.ClipsDescendants = true
+	scroll.Parent = frame
+
+	-- Button factory
+	local function createButton(text, yPos)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0, 190, 0, 36)
+		btn.Position = UDim2.new(0.5, -95, 0, yPos)
+		btn.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+		btn.Text = text
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 16
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.ZIndex = 25
+		btn.Parent = scroll
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+		return btn
+	end
+
+	-- Buttons
+	local aimbotBtn   = createButton("Aimbot", 10)
+	local strengthBtn = createButton("Set Aimbot Strength", 56)
+	local noclipBtn   = createButton("Noclip", 102)
+	local espBtn      = createButton("ESP", 148)
+	local invisBtn    = createButton("Invisible (Local)", 194)
+	local speedBtn    = createButton("Set Speed", 240)
+	local jumpBtn     = createButton("Set Jump", 286)
+	local flyBtn      = createButton("Fly", 332)
+	local flySpeedBtn = createButton("Set Fly Speed", 378)
+	local tpPlayersBtn= createButton("Teleport To Player", 424)
+
+	-- Toggle menu
+	toggleBtn.MouseButton1Click:Connect(function()
+		frame.Visible = not frame.Visible
+	end)
+
+	-----------------------------------------------------------------
+	-- Prompt box (numeric input)
+	-----------------------------------------------------------------
+	local function promptNumber(yPos, placeholder, onConfirm)
+		for _, child in ipairs(scroll:GetChildren()) do
+			if child:IsA("TextBox") and child.Name == "PromptBox" then child:Destroy() end
+		end
+		local box = Instance.new("TextBox")
+		box.Name = "PromptBox"
+		box.Size = UDim2.new(0, 190, 0, 36)
+		box.Position = UDim2.new(0.5, -95, 0, yPos)
+		box.PlaceholderText = placeholder
+		box.Text = ""
+		box.ClearTextOnFocus = true
+		box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		box.TextColor3 = Color3.fromRGB(255,255,255)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 14
+		box.ZIndex = 50
+		box.Parent = scroll
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+		box.FocusLost:Connect(function(enterPressed)
+			if enterPressed then onConfirm(box.Text) end
+			box:Destroy()
+		end)
+	end
+
+	-----------------------------------------------------------------
+	-- Invisible (Local-only)
+	-----------------------------------------------------------------
+	local isInvisible = false
+	invisBtn.MouseButton1Click:Connect(function()
+		if not player.Character then return end
+		isInvisible = not isInvisible
+		invisBtn.BackgroundColor3 = isInvisible and Color3.fromRGB(0,200,100) or Color3.fromRGB(0,100,255)
+		for _, part in ipairs(player.Character:GetDescendants()) do
+			if part:IsA("BasePart") or part:IsA("Decal") then
+				part.LocalTransparencyModifier = isInvisible and 1 or 0
+			end
+		end
+		createNotification("Invisible " .. (isInvisible and "Enabled" or "Disabled"))
+	end)
+
+	-----------------------------------------------------------------
+	-- Noclip
+	-----------------------------------------------------------------
+	local isNoclip = false
+	noclipBtn.MouseButton1Click:Connect(function()
+		isNoclip = not isNoclip
+		noclipBtn.BackgroundColor3 = isNoclip and Color3.fromRGB(0,200,100) or Color3.fromRGB(0,100,255)
+		if not isNoclip and player.Character then
+			for _, part in ipairs(player.Character:GetDescendants()) do
+				if part:IsA("BasePart") then part.CanCollide = true end
+			end
+		end
+		createNotification("Noclip " .. (isNoclip and "Enabled" or "Disabled"))
+	end)
+
+	RunService.Stepped:Connect(function()
+		if isNoclip and player.Character then
+			for _, part in ipairs(player.Character:GetDescendants()) do
+				if part:IsA("BasePart") then part.CanCollide = false end
+			end
+		end
+	end)
+
+	-----------------------------------------------------------------
+	-- ESP
+	-----------------------------------------------------------------
+	local isESP = false
+	local espStorage = {}
+	local function addESPFor(targetPlayer)
+		if targetPlayer == player or not targetPlayer.Character then return end
+		if not targetPlayer.Character:FindFirstChild("Head") then return end
+		if espStorage[targetPlayer] then return end
+
+		local head = targetPlayer.Character.Head
+		local billboard = Instance.new("BillboardGui")
+		billboard.Size = UDim2.new(0,100,0,30)
+		billboard.AlwaysOnTop = true
+		billboard.Adornee = head
+		billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		billboard.Parent = head
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1,0,1,0)
+		label.BackgroundTransparency = 1
+		label.Text = targetPlayer.Name
+		label.TextColor3 = Color3.fromRGB(255,0,0)
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 14
+		label.Parent = billboard
+
+		local highlight = Instance.new("Highlight")
+		highlight.Adornee = targetPlayer.Character
+		highlight.FillTransparency = 0.7
+		highlight.FillColor = Color3.fromRGB(255, 0, 0)
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		highlight.Parent = targetPlayer.Character
+
+		espStorage[targetPlayer] = {billboard = billboard, highlight = highlight}
+	end
+
+	local function clearESP()
+		for _, assets in pairs(espStorage) do
+			if assets.billboard then assets.billboard:Destroy() end
+			if assets.highlight then assets.highlight:Destroy() end
+		end
+		table.clear(espStorage)
+	end
+
+	espBtn.MouseButton1Click:Connect(function()
+		isESP = not isESP
+		espBtn.BackgroundColor3 = isESP and Color3.fromRGB(0,200,100) or Color3.fromRGB(0,100,255)
+		if isESP then
+			for _, p in ipairs(Players:GetPlayers()) do addESPFor(p) end
+			createNotification("ESP Enabled")
+		else
+			clearESP()
+			createNotification("ESP Disabled")
+		end
+	end)
+
+	Players.PlayerAdded:Connect(function(p)
+		if isESP then
+			p.CharacterAdded:Connect(function()
+				task.wait(0.5); addESPFor(p)
+			end)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(p)
+		if espStorage[p] then
+			if espStorage[p].billboard then espStorage[p].billboard:Destroy() end
+			if espStorage[p].highlight then espStorage[p].highlight:Destroy() end
+			espStorage[p] = nil
+		end
+	end)
+
+	-----------------------------------------------------------------
+	-- Speed
+	-----------------------------------------------------------------
+	speedBtn.MouseButton1Click:Connect(function()
+		speedBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+		promptNumber(240 + 42, "Speed (default 16, 0–200)", function(text)
+			local num = clampNumber(text, 0, 200)
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum and num then hum.WalkSpeed = num; createNotification(("Speed set to %d"):format(num)) end
+			speedBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+		end)
+	end)
+
+	-----------------------------------------------------------------
+	-- Jump
+	-----------------------------------------------------------------
+	jumpBtn.MouseButton1Click:Connect(function()
+		jumpBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+		promptNumber(286 + 42, "JumpPower (default 50, 0–200)", function(text)
+			local num = clampNumber(text, 0, 200)
+			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if hum and num then
+				hum.UseJumpPower = true
+				hum.JumpPower = num
+				createNotification(("JumpPower set to %d"):format(num))
+			end
+			jumpBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+		end)
+	end)
+
+	-----------------------------------------------------------------
+	-- Aimbot with Strength
+	-----------------------------------------------------------------
+	local isAimbot = false
+	local lockedTarget
+	local aimbotStrength = 20 -- default (0–100)
+
+	local function findNearestHead()
+		local closest, shortest = nil, math.huge
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
+				local head = p.Character.Head
+				local dist = (head.Position - camera.CFrame.Position).Magnitude
+				if dist < shortest then
+					shortest = dist
+					closest = head
+				end
+			end
+		end
+		return closest
+	end
+
+	aimbotBtn.MouseButton1Click:Connect(function()
+		isAimbot = not isAimbot
+		if isAimbot then
+			lockedTarget = findNearestHead()
+			aimbotBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+			createNotification("Aimbot Enabled")
+		else
+			lockedTarget = nil
+			aimbotBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+			createNotification("Aimbot Disabled")
+		end
+	end)
+
+	strengthBtn.MouseButton1Click:Connect(function()
+		strengthBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+		promptNumber(56 + 42, "Aimbot Strength (0–100)", function(text)
+			local num = clampNumber(text, 0, 100)
+			if num then
+				aimbotStrength = num
+				createNotification(("Aimbot Strength = %d"):format(num))
+			end
+			strengthBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+		end)
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if isAimbot then
+			if not lockedTarget or not lockedTarget.Parent then
+				lockedTarget = findNearestHead()
+			end
+			if lockedTarget then
+				local strength = math.clamp(aimbotStrength / 100, 0, 1)
+				local newCFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
+				camera.CFrame = camera.CFrame:Lerp(newCFrame, strength)
+			end
+		end
+	end)
+
+	-----------------------------------------------------------------
+	-- Fly (camera-relative, PC + mobile)
+	-----------------------------------------------------------------
+	local isFlying = false
+	local flyBV, flyGyro
+	local flySpeed = 50
+
+	local function stopFly()
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		if hum then hum.AutoRotate = true end
+		if flyBV then flyBV:Destroy() flyBV = nil end
+		if flyGyro then flyGyro:Destroy() flyGyro = nil end
+		isFlying = false
+		flyBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+	end
+
+	player.CharacterAdded:Connect(function()
+		stopFly()
+	end)
+
+	flyBtn.MouseButton1Click:Connect(function()
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not hum or not root then return end
+
+		if isFlying then
+			stopFly()
+			createNotification("Fly Disabled")
+		else
+			isFlying = true
+			flyBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+			hum.AutoRotate = false
+
+			flyBV = Instance.new("BodyVelocity")
+			flyBV.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+			flyBV.P = 1e4
+			flyBV.Velocity = Vector3.zero
+			flyBV.Parent = root
+
+			flyGyro = Instance.new("BodyGyro")
+			flyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+			flyGyro.P = 1e4
+			flyGyro.CFrame = camera.CFrame
+			flyGyro.Parent = root
+
+			createNotification("Fly Enabled")
+		end
+	end)
+
+	flySpeedBtn.MouseButton1Click:Connect(function()
+		flySpeedBtn.BackgroundColor3 = Color3.fromRGB(0,200,100)
+		promptNumber(378 + 42, "Fly Speed (default 50, 0–300)", function(text)
+			local num = clampNumber(text, 0, 300)
+			if num then flySpeed = num; createNotification(("Fly Speed = %d"):format(num)) end
+			flySpeedBtn.BackgroundColor3 = Color3.fromRGB(0,100,255)
+		end)
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if not isFlying or not flyBV or not flyGyro then return end
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not hum or not root then return end
+
+		local camCF = camera.CFrame
+		local forward3D = camCF.LookVector
+		local rightXZ = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z)
+		if rightXZ.Magnitude > 0 then rightXZ = rightXZ.Unit end
+
+		local move = Vector3.zero
+
+		-- PC controls
+		if UserInputService.KeyboardEnabled then
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += forward3D end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= forward3D end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= rightXZ end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += rightXZ end
+		end
+
+		-- Mobile joystick (Humanoid MoveDirection)
+		if UserInputService.TouchEnabled then
+			local dir = hum.MoveDirection
+			if dir.Magnitude > 0 then
+				local forwardXZ = Vector3.new(forward3D.X, 0, forward3D.Z)
+				if forwardXZ.Magnitude > 0 then forwardXZ = forwardXZ.Unit end
+				local mF = dir:Dot(forwardXZ)
+				local mR = dir:Dot(rightXZ)
+				move = (forward3D * mF) + (rightXZ * mR)
+			end
+		end
+
+		if move.Magnitude > 0 then
+			flyBV.Velocity = move.Unit * flySpeed
+		else
+			flyBV.Velocity = Vector3.zero
+		end
+
+		flyGyro.CFrame = CFrame.new(root.Position, root.Position + camCF.LookVector)
+	end)
+
+	-----------------------------------------------------------------
+	-- Teleport to Player (popup outside scroll)
+	-----------------------------------------------------------------
+	local tpFrame = Instance.new("Frame")
+	tpFrame.Size = UDim2.new(0, 220, 0, 280)
+	tpFrame.Position = UDim2.new(0.5, -110, 0.5, -140)
+	tpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	tpFrame.Visible = false
+	tpFrame.ZIndex = 40
+	tpFrame.Parent = frame
+	Instance.new("UICorner", tpFrame).CornerRadius = UDim.new(0, 10)
+
+	local tpHeader = Instance.new("TextLabel")
+	tpHeader.Size = UDim2.new(1, -36, 0, 30)
+	tpHeader.Position = UDim2.new(0, 8, 0, 4)
+	tpHeader.BackgroundTransparency = 1
+	tpHeader.Text = "Teleport to Player"
+	tpHeader.Font = Enum.Font.GothamBold
+	tpHeader.TextSize = 16
+	tpHeader.TextColor3 = Color3.fromRGB(255,255,255)
+	tpHeader.ZIndex = 41
+	tpHeader.Parent = tpFrame
+
+	local tpClose = Instance.new("TextButton")
+	tpClose.Size = UDim2.new(0, 26, 0, 26)
+	tpClose.Position = UDim2.new(1, -30, 0, 6)
+	tpClose.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	tpClose.Text = "X"
+	tpClose.Font = Enum.Font.GothamBold
+	tpClose.TextSize = 14
+	tpClose.TextColor3 = Color3.fromRGB(255,255,255)
+	tpClose.ZIndex = 41
+	tpClose.Parent = tpFrame
+	Instance.new("UICorner", tpClose).CornerRadius = UDim.new(0, 6)
+
+	local tpList = Instance.new("ScrollingFrame")
+	tpList.Size = UDim2.new(1, -12, 1, -44)
+	tpList.Position = UDim2.new(0, 6, 0, 38)
+	tpList.BackgroundTransparency = 1
+	tpList.ScrollBarThickness = 6
+	tpList.ZIndex = 41
+	tpList.Active = true
+	tpList.Parent = tpFrame
+
+	local function refreshPlayerList()
+		for _, child in ipairs(tpList:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		local y = 0
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= player then
+				local btn = Instance.new("TextButton")
+				btn.Size = UDim2.new(1, -4, 0, 32)
+				btn.Position = UDim2.new(0, 2, 0, y)
+				btn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+				btn.Text = p.Name
+				btn.Font = Enum.Font.Gotham
+				btn.TextSize = 14
+				btn.TextColor3 = Color3.fromRGB(255,255,255)
+				btn.ZIndex = 42
+				btn.Parent = tpList
+				Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+				btn.MouseButton1Click:Connect(function()
+					if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
+						p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+						player.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+						createNotification("Teleported to " .. p.Name)
+					end
+				end)
+				y += 36
+			end
+		end
+		tpList.CanvasSize = UDim2.new(0, 0, 0, y)
+	end
+
+	tpPlayersBtn.MouseButton1Click:Connect(function()
+		tpFrame.Visible = not tpFrame.Visible
+		if tpFrame.Visible then refreshPlayerList() end
+	end)
+
+	tpClose.MouseButton1Click:Connect(function()
+		tpFrame.Visible = false
+	end)
+
+	Players.PlayerAdded:Connect(function()
+		if tpFrame.Visible then refreshPlayerList() end
+	end)
+	Players.PlayerRemoving:Connect(function()
+		if tpFrame.Visible then refreshPlayerList() end
+	end)
+end)
