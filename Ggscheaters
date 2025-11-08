@@ -1,0 +1,643 @@
+-- LocalScript inside StarterPlayerScripts
+-- Confirmation UI -> proceeds into full StudyMenu GUI (safe/dev tools only)
+-- Upgraded UX while avoiding cheat features
+-- By crtzPOHANS21 (UI preserved), upgraded by ChatGPT
+
+---------------------------------------------------------------------
+-- Services
+---------------------------------------------------------------------
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+---------------------------------------------------------------------
+-- Utilities
+---------------------------------------------------------------------
+local function tween(obj, time, props, style, direction)
+	style = style or Enum.EasingStyle.Quad
+	direction = direction or Enum.EasingDirection.Out
+	local t = TweenService:Create(obj, TweenInfo.new(time, style, direction), props)
+	t:Play()
+	return t
+end
+
+local function clampToViewport(guiObject)
+	local function clamp()
+		local vp = workspace.CurrentCamera.ViewportSize
+		local pos = guiObject.Position
+		local size = guiObject.AbsoluteSize
+		local x = math.clamp(pos.X.Offset, 0, math.max(0, vp.X - size.X))
+		local y = math.clamp(pos.Y.Offset, 0, math.max(0, vp.Y - size.Y))
+		guiObject.Position = UDim2.new(0, x, 0, y)
+	end
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(clamp)
+	guiObject:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp)
+	clamp()
+end
+
+local function makeDraggable(targetFrame, handle)
+	handle = handle or targetFrame
+	local dragging, dragInput, dragStart, startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		targetFrame.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
+		clampToViewport(targetFrame)
+	end
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = targetFrame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+	handle.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+end
+
+---------------------------------------------------------------------
+-- Small Confirmation GUI (with smooth tween)
+---------------------------------------------------------------------
+local confirmGui = Instance.new("ScreenGui")
+confirmGui.Name = "ConfirmMenu"
+confirmGui.ResetOnSpawn = false
+confirmGui.IgnoreGuiInset = true
+confirmGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+confirmGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Toggle button for the confirm UI
+local confirmToggle = Instance.new("TextButton")
+confirmToggle.Size = UDim2.new(0, 50, 0, 50)
+confirmToggle.Position = UDim2.new(0, 10, 0.8, 0)
+confirmToggle.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+confirmToggle.Text = "="
+confirmToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+confirmToggle.Font = Enum.Font.GothamBold
+confirmToggle.TextSize = 20
+confirmToggle.Parent = confirmGui
+Instance.new("UICorner", confirmToggle).CornerRadius = UDim.new(0, 8)
+makeDraggable(confirmToggle)
+
+local confirmFrame = Instance.new("Frame")
+confirmFrame.Size = UDim2.new(0, 260, 0, 150)
+confirmFrame.Position = UDim2.new(0.5, -130, 0.5, -75)
+confirmFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+confirmFrame.Visible = false
+confirmFrame.BackgroundTransparency = 1
+confirmFrame.Parent = confirmGui
+Instance.new("UICorner", confirmFrame).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundTransparency = 1
+title.Text = "By crtzPOHANS21"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Parent = confirmFrame
+
+local proceedBtn = Instance.new("TextButton")
+proceedBtn.Size = UDim2.new(0.5, -10, 0, 40)
+proceedBtn.Position = UDim2.new(0, 5, 1, -45)
+proceedBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+proceedBtn.Text = "Proceed"
+proceedBtn.Font = Enum.Font.GothamBold
+proceedBtn.TextSize = 16
+proceedBtn.TextColor3 = Color3.fromRGB(255,255,255)
+proceedBtn.Parent = confirmFrame
+Instance.new("UICorner", proceedBtn).CornerRadius = UDim.new(0, 8)
+
+local cancelBtn = Instance.new("TextButton")
+cancelBtn.Size = UDim2.new(0.5, -10, 0, 40)
+cancelBtn.Position = UDim2.new(0.5, 5, 1, -45)
+cancelBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+cancelBtn.Text = "Cancel"
+cancelBtn.Font = Enum.Font.GothamBold
+cancelBtn.TextSize = 16
+cancelBtn.TextColor3 = Color3.fromRGB(255,255,255)
+cancelBtn.Parent = confirmFrame
+Instance.new("UICorner", cancelBtn).CornerRadius = UDim.new(0, 8)
+
+local isAnimatingConfirm = false
+local function showConfirm(show)
+	if isAnimatingConfirm then return end
+	isAnimatingConfirm = true
+	if show then
+		confirmFrame.Visible = true
+		confirmFrame.BackgroundTransparency = 1
+		tween(confirmFrame, 0.2, {BackgroundTransparency = 0.05})
+	else
+		local t = tween(confirmFrame, 0.2, {BackgroundTransparency = 1})
+		t.Completed:Connect(function()
+			confirmFrame.Visible = false
+		end)
+	end
+	task.delay(0.22, function() isAnimatingConfirm = false end)
+end
+
+confirmToggle.MouseButton1Click:Connect(function()
+	showConfirm(not confirmFrame.Visible)
+end)
+
+cancelBtn.MouseButton1Click:Connect(function()
+	if confirmGui then confirmGui:Destroy() end
+end)
+
+---------------------------------------------------------------------
+-- Proceed: spawn StudyMenu GUI (safe tools)
+---------------------------------------------------------------------
+proceedBtn.MouseButton1Click:Connect(function()
+	-- remove confirm UI
+	if confirmGui then confirmGui:Destroy() end
+
+	-----------------------------------------------------------------
+	-- StudyMenu root ScreenGui
+	-----------------------------------------------------------------
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "StudyMenu"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = player:WaitForChild("PlayerGui")
+
+	-- Notification System (rounded, fade in/out)
+	local function createNotification(msg)
+		local notif = Instance.new("Frame")
+		notif.Size = UDim2.new(0, 260, 0, 42)
+		notif.Position = UDim2.new(0.5, -130, 0.12, 0)
+		notif.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		notif.BackgroundTransparency = 1
+		notif.BorderSizePixel = 0
+		notif.ZIndex = 100
+		notif.Parent = gui
+		Instance.new("UICorner", notif).CornerRadius = UDim.new(0, 12)
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, -12, 1, 0)
+		label.Position = UDim2.new(0, 6, 0, 0)
+		label.BackgroundTransparency = 1
+		label.Text = msg
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 16
+		label.TextColor3 = Color3.fromRGB(255,255,255)
+		label.TextTransparency = 1
+		label.ZIndex = 101
+		label.Parent = notif
+
+		tween(notif, 0.22, {BackgroundTransparency = 0.15})
+		tween(label, 0.22, {TextTransparency = 0})
+
+		task.delay(2, function()
+			local t1 = tween(notif, 0.35, {BackgroundTransparency = 1})
+			local t2 = tween(label, 0.35, {TextTransparency = 1})
+			t1.Completed:Connect(function() notif:Destroy() end)
+		end)
+	end
+
+	-- Debounce helper for buttons
+	local function withDebounce(btn, fn, cooldown)
+		cooldown = cooldown or 0.15
+		local busy = false
+		btn.MouseButton1Click:Connect(function()
+			if busy then return end
+			busy = true
+			fn()
+			task.delay(cooldown, function() busy = false end)
+		end)
+	end
+
+	-- Toggle button (draggable itself)
+	local toggleBtn = Instance.new("TextButton")
+	toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+	toggleBtn.Position = UDim2.new(0, 10, 0.8, 0)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+	toggleBtn.Text = "="
+	toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	toggleBtn.Font = Enum.Font.GothamBold
+	toggleBtn.TextSize = 20
+	toggleBtn.ZIndex = 90
+	toggleBtn.Parent = gui
+	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+	makeDraggable(toggleBtn)
+	clampToViewport(toggleBtn)
+
+	-- Menu frame
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0, 230, 0, 520)
+	frame.Position = UDim2.new(0.7, 0, 0.5, -260)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	frame.BackgroundTransparency = 0.1
+	frame.Visible = false
+	frame.ZIndex = 10
+	frame.Parent = gui
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+	clampToViewport(frame)
+
+	-- Title bar (drag handle)
+	local titleBar = Instance.new("Frame")
+	titleBar.Size = UDim2.new(1, 0, 0, 32)
+	titleBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	titleBar.BackgroundTransparency = 0.6
+	titleBar.BorderSizePixel = 0
+	titleBar.ZIndex = 20
+	titleBar.Parent = frame
+
+	local title2 = Instance.new("TextLabel")
+	title2.Size = UDim2.new(1, -10, 1, 0)
+	title2.Position = UDim2.new(0, 5, 0, 0)
+	title2.BackgroundTransparency = 1
+	title2.Text = "By crtzPOHANS21 — StudyMenu (Safe)"
+	title2.Font = Enum.Font.GothamBold
+	title2.TextSize = 16
+	title2.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title2.ZIndex = 21
+	title2.Parent = titleBar
+
+	-- Drag only via header
+	makeDraggable(frame, titleBar)
+
+	-- Rainbow background (subtle)
+	local hue = 0
+	RunService.RenderStepped:Connect(function()
+		hue = (hue + 0.002) % 1
+		frame.BackgroundColor3 = Color3.fromHSV(hue, 0.85, 1)
+	end)
+
+	-- Smooth show/hide
+	local isMenuAnimating = false
+	local function showMenu(show)
+		if isMenuAnimating then return end
+		isMenuAnimating = true
+		if show then
+			frame.Visible = true
+			frame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 0.5, -240)
+			frame.BackgroundTransparency = 0.3
+			tween(frame, 0.18, {BackgroundTransparency = 0.1, Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 0.5, -260)})
+		else
+			local t = tween(frame, 0.18, {BackgroundTransparency = 0.3, Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, 0.5, -240)})
+			t.Completed:Connect(function() frame.Visible = false end)
+		end
+		task.delay(0.2, function() isMenuAnimating = false end)
+	end
+
+	withDebounce(toggleBtn, function()
+		showMenu(not frame.Visible)
+	end)
+
+	-- Scrollable menu
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Size = UDim2.new(1, 0, 1, -32)
+	scroll.Position = UDim2.new(0, 0, 0, 32)
+	scroll.BackgroundTransparency = 1
+	scroll.ScrollBarThickness = 6
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 700)
+	scroll.ZIndex = 15
+	scroll.Active = true
+	scroll.ClipsDescendants = true
+	scroll.Parent = frame
+
+	-- Button factory
+	local function createButton(text, yPos)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0, 190, 0, 36)
+		btn.Position = UDim2.new(0.5, -95, 0, yPos)
+		btn.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+		btn.Text = text
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 16
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.ZIndex = 25
+		btn.AutoButtonColor = true
+		btn.Parent = scroll
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+		return btn
+	end
+
+	-- Input prompt (TextBox) factory
+	local activePrompts = {}
+	local function closeAllPrompts()
+		for _, b in ipairs(activePrompts) do
+			if b and b.Parent then b:Destroy() end
+		end
+		table.clear(activePrompts)
+	end
+
+	local function promptNumber(yPos, placeholder, onConfirm)
+		closeAllPrompts()
+		local box = Instance.new("TextBox")
+		box.Name = "PromptBox"
+		box.Size = UDim2.new(0, 190, 0, 36)
+		box.Position = UDim2.new(0.5, -95, 0, yPos)
+		box.PlaceholderText = placeholder
+		box.Text = ""
+		box.ClearTextOnFocus = true
+		box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		box.TextColor3 = Color3.fromRGB(255,255,255)
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 14
+		box.ZIndex = 50
+		box.Parent = scroll
+		Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+		table.insert(activePrompts, box)
+		box:CaptureFocus()
+		box.FocusLost:Connect(function(enterPressed)
+			if enterPressed and onConfirm then
+				local n = tonumber(box.Text)
+				onConfirm(n)
+			end
+			box:Destroy()
+		end)
+	end
+
+	-----------------------------------------------------------------
+	-- Buttons (SAFE FEATURES)
+	-----------------------------------------------------------------
+	local idx = 10
+	local function nextY()
+		local y = idx
+		idx += 46
+		return y
+	end
+
+	-- Graphics Presets
+	local gfxBtn = createButton("Graphics Preset (Low/Med/High)", nextY())
+	local gfxState = 2 -- 1:Low 2:Med 3:High
+	local function applyGfx(state)
+		gfxState = state
+		-- Create/find effects
+		local blur = Lighting:FindFirstChildOfClass("BlurEffect") or Instance.new("BlurEffect", Lighting)
+		local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect", Lighting)
+		local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect", Lighting)
+		-- Shadow toggle via GlobalShadows
+		if state == 1 then
+			Lighting.GlobalShadows = false
+			blur.Size = 0
+			bloom.Intensity = 0
+			cc.Contrast = 0
+			cc.Saturation = 0
+		elseif state == 2 then
+			Lighting.GlobalShadows = true
+			blur.Size = 0
+			bloom.Intensity = 0.5
+			cc.Contrast = 0.05
+			cc.Saturation = 0.05
+		else
+			Lighting.GlobalShadows = true
+			blur.Size = 0
+			bloom.Intensity = 1.1
+			cc.Contrast = 0.1
+			cc.Saturation = 0.1
+		end
+		createNotification("Graphics: " .. ({"Low","Medium","High"})[state])
+	end
+	withDebounce(gfxBtn, function()
+		local nextState = gfxState + 1; if nextState > 3 then nextState = 1 end
+		applyGfx(nextState)
+	end)
+	applyGfx(gfxState)
+
+	-- Field of View
+	local fovBtn = createButton("Set FOV", nextY())
+	withDebounce(fovBtn, function()
+		local y = fovBtn.Position.Y.Offset + 42
+		promptNumber(y, "FOV (60–100)", function(n)
+			if n and n >= 60 and n <= 100 then
+				camera.FieldOfView = n
+				createNotification(("FOV set to %d"):format(n))
+			else
+				createNotification("Invalid FOV")
+			end
+		end)
+	end)
+
+	-- Mouse sensitivity (camera pan speed multiplier)
+	local sensBtn = createButton("Mouse Sensitivity", nextY())
+	local UserGameSettings = UserSettings():GetService("UserGameSettings")
+	withDebounce(sensBtn, function()
+		local y = sensBtn.Position.Y.Offset + 42
+		promptNumber(y, "Sensitivity (0.2–4)", function(n)
+			if n and n >= 0.2 and n <= 4 then
+				UserGameSettings.MouseSensitivity = n
+				createNotification(("Sensitivity = %.2f"):format(n))
+			else
+				createNotification("Invalid sensitivity")
+			end
+		end)
+	end)
+
+	-- Crosshair overlay toggle
+	local crosshairBtn = createButton("Toggle Crosshair", nextY())
+	local crosshairGui
+	local function setCrosshair(on)
+		if on and not crosshairGui then
+			crosshairGui = Instance.new("ScreenGui")
+			crosshairGui.Name = "CrosshairOverlay"
+			crosshairGui.ResetOnSpawn = false
+			crosshairGui.IgnoreGuiInset = true
+			crosshairGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			crosshairGui.Parent = gui
+
+			local dot = Instance.new("Frame")
+			dot.Size = UDim2.new(0, 6, 0, 6)
+			dot.AnchorPoint = Vector2.new(0.5, 0.5)
+			dot.Position = UDim2.new(0.5, 0, 0.5, 0)
+			dot.BackgroundColor3 = Color3.fromRGB(255,255,255)
+			dot.BorderSizePixel = 0
+			dot.Parent = crosshairGui
+			Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+		elseif not on and crosshairGui then
+			crosshairGui:Destroy()
+			crosshairGui = nil
+		end
+	end
+	local crosshairOn = false
+	withDebounce(crosshairBtn, function()
+		crosshairOn = not crosshairOn
+		setCrosshair(crosshairOn)
+		createNotification("Crosshair " .. (crosshairOn and "On" or "Off"))
+	end)
+
+	-- Master Volume
+	local volBtn = createButton("Set Volume", nextY())
+	withDebounce(volBtn, function()
+		local y = volBtn.Position.Y.Offset + 42
+		promptNumber(y, "Volume (0–1)", function(n)
+			if n and n >= 0 and n <= 1 then
+				SoundService.Volume = n
+				createNotification(("Volume = %.2f"):format(n))
+			else
+				createNotification("Invalid volume")
+			end
+		end)
+	end)
+
+	-- Spectate Player (camera-only) with search
+	local spectateBtn = createButton("Spectate Player", nextY())
+
+	local spFrame = Instance.new("Frame")
+	spFrame.Size = UDim2.new(0, 220, 0, 320)
+	spFrame.Position = UDim2.new(0.5, -110, 0.5, -160)
+	spFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	spFrame.Visible = false
+	spFrame.ZIndex = 40
+	spFrame.Parent = frame
+	Instance.new("UICorner", spFrame).CornerRadius = UDim.new(0, 10)
+
+	local spHeader = Instance.new("TextLabel")
+	spHeader.Size = UDim2.new(1, -36, 0, 30)
+	spHeader.Position = UDim2.new(0, 8, 0, 4)
+	spHeader.BackgroundTransparency = 1
+	spHeader.Text = "Spectate Player"
+	spHeader.Font = Enum.Font.GothamBold
+	spHeader.TextSize = 16
+	spHeader.TextColor3 = Color3.fromRGB(255,255,255)
+	spHeader.ZIndex = 41
+	spHeader.Parent = spFrame
+
+	local spClose = Instance.new("TextButton")
+	spClose.Size = UDim2.new(0, 26, 0, 26)
+	spClose.Position = UDim2.new(1, -30, 0, 6)
+	spClose.BackgroundColor3 = Color3.fromRGB(60,60,60)
+	spClose.Text = "X"
+	spClose.Font = Enum.Font.GothamBold
+	spClose.TextSize = 14
+	spClose.TextColor3 = Color3.fromRGB(255,255,255)
+	spClose.ZIndex = 41
+	spClose.Parent = spFrame
+	Instance.new("UICorner", spClose).CornerRadius = UDim.new(0, 6)
+
+	local searchBox = Instance.new("TextBox")
+	searchBox.Size = UDim2.new(1, -12, 0, 30)
+	searchBox.Position = UDim2.new(0, 6, 0, 36)
+	searchBox.PlaceholderText = "Search player..."
+	searchBox.Text = ""
+	searchBox.ClearTextOnFocus = true
+	searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	searchBox.TextColor3 = Color3.fromRGB(255,255,255)
+	searchBox.Font = Enum.Font.Gotham
+	searchBox.TextSize = 14
+	searchBox.ZIndex = 41
+	searchBox.Parent = spFrame
+	Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 8)
+
+	local spList = Instance.new("ScrollingFrame")
+	spList.Size = UDim2.new(1, -12, 1, -76)
+	spList.Position = UDim2.new(0, 6, 0, 70)
+	spList.BackgroundTransparency = 1
+	spList.ScrollBarThickness = 6
+	spList.ZIndex = 41
+	spList.Active = true
+	spList.Parent = spFrame
+
+	local function refreshSpectateList(filter)
+		for _, child in ipairs(spList:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		local y = 0
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= player and (not filter or string.find(string.lower(p.Name), string.lower(filter), 1, true)) then
+				local btn = Instance.new("TextButton")
+				btn.Size = UDim2.new(1, -4, 0, 32)
+				btn.Position = UDim2.new(0, 2, 0, y)
+				btn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+				btn.Text = p.Name
+				btn.Font = Enum.Font.Gotham
+				btn.TextSize = 14
+				btn.TextColor3 = Color3.fromRGB(255,255,255)
+				btn.ZIndex = 42
+				btn.Parent = spList
+				Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+				withDebounce(btn, function()
+					if p.Character then
+						local hum = p.Character:FindFirstChildOfClass("Humanoid")
+						if hum then
+							camera.CameraSubject = hum
+							createNotification("Spectating "..p.Name)
+						end
+					end
+				end, 0.05)
+				y += 36
+			end
+		end
+		spList.CanvasSize = UDim2.new(0, 0, 0, y)
+	end
+	refreshSpectateList()
+
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		refreshSpectateList(searchBox.Text)
+	end)
+
+	withDebounce(spectateBtn, function()
+		spFrame.Visible = not spFrame.Visible
+		if spFrame.Visible then refreshSpectateList(searchBox.Text) end
+	end)
+	withDebounce(spClose, function() spFrame.Visible = false end)
+
+	-- Reset Camera
+	local resetCamBtn = createButton("Reset Camera (Yourself)", nextY())
+	withDebounce(resetCamBtn, function()
+		if player.Character then
+			local hum = player.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				camera.CameraSubject = hum
+				createNotification("Camera reset to yourself")
+			end
+		end
+	end)
+
+	-- Reset UI position
+	local resetUIBtn = createButton("Reset Menu Position", nextY())
+	withDebounce(resetUIBtn, function()
+		frame.Position = UDim2.new(0.7, 0, 0.5, -260)
+		toggleBtn.Position = UDim2.new(0, 10, 0.8, 0)
+		createNotification("UI positions reset")
+	end)
+
+	-- Close all prompts
+	local closePromptsBtn = createButton("Close All Prompts", nextY())
+	withDebounce(closePromptsBtn, function()
+		closeAllPrompts()
+		createNotification("Prompts closed")
+	end)
+
+	-- Info / disclaimer
+	local infoBtn = createButton("Info", nextY())
+	withDebounce(infoBtn, function()
+		createNotification("Safe StudyMenu: camera, UI, and performance tools only.")
+	end)
+
+	-- (Optional) you can add **server-validated** dev actions here via RemoteEvents.
+	-- Example pattern:
+	-- local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	-- local Remotes = ReplicatedStorage:WaitForChild("DevRemotes")
+	-- devButton.MouseButton1Click:Connect(function()
+	--     Remotes.RequestSomething:FireServer()
+	-- end)
+
+end)
